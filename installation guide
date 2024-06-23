@@ -1,0 +1,38 @@
+Steps to follow:
+
+1. Install a lunix server / or use an existing one. This scrit was tested in a Ubuntu server 24.04
+2. Open the terminal and create a sh file, you can give whatever name you want just be sure to have the extension "yourfilename".sh. I use nano
+3.       sudo nano "yourfilename".sh
+4. Copy the entire lines inside the sh s_crm_0.1.sh file 
+5. Change the permissions of the new sh file useing this command
+6.         sudo chmod +x "yourfilename".sh
+7. To run the new script use the following command
+8.         sudo ./"yourfilename".sh
+9. Follow the script requests and take note of the user & password of the databse that will be requested
+10. When the script finishes run the command
+11.         sudo mysql_secure_installation
+12.     just press enter (there is no root password
+13.     Switch to unix_socket authentication [Y/n] Y
+14.     Change the root password? [Y/n] y
+15.     put your DB root password and take note of it!!!
+16.     Remove anonymous users? [Y/n] Y
+17.     Disallow root login remotely? [Y/n] Y
+18.     Remove test database and access to it? [Y/n] Y
+19.     Reload privilege tables now? [Y/n]
+20. Now you can use the IP address and conclude the instalation of the CSuite CRM using the DB user and passwords you choose at the begining.
+
+21. On the webpag config on these fields you place
+      DATABASE CONFIGURATION:
+        SuiteCRM Database User
+              USER THAT YOU CHOOSE ON THE SCRIPT
+        SuiteCRM Database User Password
+              PASSWORD THAT YOU CHOOSE ON THE SCRIPT
+        Host Name
+              localhost
+        Database Name
+              CRM
+
+Then the rest you decide which admon user and admin password
+
+
+    GOOD LUCK!
