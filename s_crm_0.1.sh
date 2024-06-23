@@ -25,6 +25,11 @@ db_pass=$(get_input "Input your MariaDB PASSWORD")
 server_ip=$(get_internal_ip)
 echo "IP interno detectado: $server_ip"
 
+# Atualizar e instalar pacotes essenciais
+echo "Atualizando e instalando pacotes essenciais..."
+sudo apt update && sudo apt upgrade -y
+sudo apt install unzip wget -y
+
 # Atualizar e instalar pacotes
 echo "Atualizando e instalando pacotes..."
 sudo add-apt-repository ppa:ondrej/php -y && sudo apt update && sudo apt upgrade -y
@@ -104,5 +109,5 @@ sudo find /var/www/html/crm -type f -not -perm 0644 -exec chmod 0644 {} \;
 sudo find /var/www/html/crm ! -user www-data -exec chown www-data:www-data {} \;
 sudo chmod +x /var/www/html/crm/bin/console
 
-echo "Script concluído. Lembre-se de executar 'sudo mysql_secure_installation' manualmente."
-echo "Você pode acessar o SuiteCRM abrindo um navegador e acessando http://$server_ip"
+echo "The script is finished, before opening the web browser, you must run 'sudo mysql_secure_installation' manualy and follow the instructions"
+echo "You can now conclude the instalation of your CRM from the web borwser using this address http://$server_ip remember all the user and passwords defined. Enjoy and good luck!"
