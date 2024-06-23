@@ -1,6 +1,6 @@
 # SuiteCRM_Script
 
-![alt text]([http://url/to/img.png](https://suitecrm.com/wp-content/uploads/2017/12/logo_x2.png))
+![alt text](/logo_x2.png)
 
 Installing Suite CRM 8.6.1 easlly from a script file
 
