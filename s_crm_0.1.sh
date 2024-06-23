@@ -23,34 +23,34 @@ db_pass=$(get_input "Input your MariaDB PASSWORD")
 
 # Obter o IP interno automaticamente
 server_ip=$(get_internal_ip)
-echo "IP interno detectado: $server_ip"
+echo "IP retrieved: $server_ip"
 
 # Atualizar e instalar pacotes essenciais
-echo "Atualizando e instalando pacotes essenciais..."
+echo "Updating  & installing packages..."
 sudo apt update && sudo apt upgrade -y
 sudo apt install unzip wget -y
 
 # Atualizar e instalar pacotes
-echo "Atualizando e instalando pacotes..."
+echo "Updating & installing packages..."
 sudo add-apt-repository ppa:ondrej/php -y && sudo apt update && sudo apt upgrade -y
 
 sudo apt update && sudo apt install php8.2 libapache2-mod-php8.2 php8.2-cli php8.2-curl php8.2-common php8.2-intl php8.2-gd php8.2-mbstring php8.2-mysqli php8.2-pdo php8.2-mysql php8.2-xml php8.2-zip php8.2-imap php8.2-ldap -y php8.2-curl php8.2-soap php8.2-bcmath
 
 # Configurar Apache
-echo "Configurando Apache..."
+echo "Configuring Apache Server..."
 sudo a2enmod rewrite
 sudo systemctl restart apache2
 
 # Instalar e configurar MariaDB
-echo "Instalando e configurando MariaDB..."
+echo "Installing MariaDB..."
 sudo apt install mariadb-server mariadb-client -y
 
 # Nota: mysql_secure_installation requer interação manual
 echo "Execute 'sudo mysql_secure_installation' manual after the script finishes."
 
 # Configurar banco de dados
-echo "Configurando banco de dados..."
-sudo mysql -e "CREATE DATABASE PMVC;
+echo "Configuring main DB..."
+sudo mysql -e "CREATE DATABASE CMR;
 CREATE USER '$db_user'@'localhost' IDENTIFIED BY '$db_pass';
 GRANT ALL PRIVILEGES ON PMVC.* TO '$db_user'@'localhost';
 FLUSH PRIVILEGES;"
@@ -59,12 +59,8 @@ FLUSH PRIVILEGES;"
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
 
-# Instalar SSH e nano
-echo "Instalando SSH e nano..."
-sudo apt install ssh
-
 # Configurar SuiteCRM
-echo "Configurando SuiteCRM..."
+echo "Installing & Configuring SuiteCRM..."
 cd /var/www/html
 sudo mkdir crm
 cd /var/www/html/crm
@@ -74,7 +70,7 @@ sudo chown -R www-data:www-data /var/www/html/crm
 sudo chmod -R 755 /var/www/html/crm
 
 # Configurar VirtualHost
-echo "Configurando VirtualHost..."
+echo "Configuring VirtualHost..."
 cat << EOF | sudo tee /etc/apache2/sites-available/crm.conf
 <VirtualHost *:80>
     ServerAdmin admin@example.com
@@ -94,7 +90,7 @@ sudo a2ensite crm.conf
 sudo systemctl reload apache2
 
 # Configurar php.ini
-echo "Configurando php.ini..."
+echo "Setting php.ini..."
 sudo sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/8.2/apache2/php.ini
 sudo sed -i 's/upload_max_filesize = .*/upload_max_filesize = 50M/' /etc/php/8.2/apache2/php.ini
 sudo sed -i 's/post_max_size = .*/post_max_size = 50M/' /etc/php/8.2/apache2/php.ini
@@ -103,11 +99,11 @@ sudo sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.2/a
 sudo systemctl restart apache2
 
 # Ajustar permissões
-echo "Ajustando permissões..."
+echo "Adjusting permissions..."
 sudo find /var/www/html/crm -type d -not -perm 2755 -exec chmod 2755 {} \;
 sudo find /var/www/html/crm -type f -not -perm 0644 -exec chmod 0644 {} \;
 sudo find /var/www/html/crm ! -user www-data -exec chown www-data:www-data {} \;
 sudo chmod +x /var/www/html/crm/bin/console
 
 echo "The script is finished, before opening the web browser, you must run 'sudo mysql_secure_installation' manualy and follow the instructions"
-echo "You can now conclude the instalation of your CRM from the web borwser using this address http://$server_ip remember all the user and passwords defined. Enjoy and good luck!"
+echo "You can now conclude the instalation of your CRM from the web borwser using this address http://$server_ip remember all the user and passwords you previouslly defined. Enjoy and good luck!"
