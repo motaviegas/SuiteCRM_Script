@@ -18,6 +18,7 @@ db_pass=$(get_input "Digite a senha para o usuário do MariaDB")
 # Obter o IP interno automaticamente
 server_ip=$(get_internal_ip)
 echo "IP interno detectado: $server_ip"
+
 # Atualizar e instalar pacotes
 echo "Atualizando e instalando pacotes..."
 sudo add-apt-repository ppa:ondrej/php -y && sudo apt update && sudo apt upgrade -y
