@@ -6,11 +6,18 @@ get_input() {
     echo $value
 }
 
+# Obter o IP interno automaticamente
+get_internal_ip() {
+    ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127' | head -n1
+}
+
 # Solicitar informações do usuário
 db_user=$(get_input "Digite o nome de usuário para o MariaDB")
 db_pass=$(get_input "Digite a senha para o usuário do MariaDB")
-server_ip=$(get_input "Digite o IP do servidor")
 
+# Obter o IP interno automaticamente
+server_ip=$(get_internal_ip)
+echo "IP interno detectado: $server_ip"
 # Atualizar e instalar pacotes
 echo "Atualizando e instalando pacotes..."
 sudo add-apt-repository ppa:ondrej/php -y && sudo apt update && sudo apt upgrade -y
