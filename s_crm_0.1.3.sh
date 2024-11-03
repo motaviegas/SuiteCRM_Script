@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Function to request user input
 get_input() {
     read -p "$1: " value
@@ -33,6 +31,15 @@ sudo apt update && sudo apt install php8.2 libapache2-mod-php8.2 php8.2-cli php8
 echo "Configuring Apache Server..."
 sudo a2enmod rewrite
 sudo systemctl restart apache2
+
+# Disable directory listing globally
+echo "Disabling directory listing globally..."
+cat << EOF | sudo tee /etc/apache2/conf-available/disable-directory-listing.conf
+<Directory /var/www/>
+    Options -Indexes
+</Directory>
+EOF
+sudo a2enconf disable-directory-listing
 
 # Install and configure MariaDB
 echo "Installing MariaDB..."
@@ -75,8 +82,9 @@ echo "Installing and configuring SuiteCRM..."
 cd /var/www/html
 sudo mkdir crm
 cd /var/www/html/crm
-sudo wget https://suitecrm.com/download/147/suite86/564058/suitecrm-8-6-1.zip 
-sudo unzip suitecrm-8-6-1.zip
+sudo wget https://suitecrm.com/download/148/suite87/564544/suitecrm-8-7-0.zip
+#!/bin/bash 
+sudo unzip suitecrm-8-7-0.zip
 sudo chown -R www-data:www-data /var/www/html/crm
 sudo chmod -R 755 /var/www/html/crm
 
