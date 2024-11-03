@@ -6,6 +6,6 @@ Installing SuiteCRM 8.7.0 Easily with a Script File
 
 There isn't much user-friendly documentation available for easily installing this great CRM, so I created a tested SuiteCRM installation script that will allow you to install it on a Linux computer or a virtual Linux machine in under 10 minutes.
 
-[I will soon post a video with a timer to demonstrate this](https://youtu.be/eycqCChZ8nI).
+[This is the install video for easy life](https://youtu.be/eycqCChZ8nI).
 
       NOTE: I am not affiliated with the SuiteCRM team, nor am I being supported by them.
