@@ -135,7 +135,7 @@ cd /var/www/html
 sudo mkdir crm
 cd /var/www/html/crm
 sudo wget https://suitecrm.com/download/148/suite87/564667/suitecrm-8-7-1.zip
-sudo unzip suitecrm-8-7-0.zip
+sudo unzip suitecrm-8-7-1.zip
 sudo chown -R www-data:www-data /var/www/html/crm
 sudo chmod -R 755 /var/www/html/crm
 
