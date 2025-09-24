@@ -19,6 +19,15 @@ check_status() {
     fi
 }
 
+# Ask if this is a production or development install
+echo "Is this a production or development installation? (prod/dev)"
+read -p "Enter 'prod' for production or 'dev' for development: " install_mode
+if [[ "$install_mode" != "prod" && "$install_mode" != "dev" ]]; then
+    echo "Error: Please enter 'prod' or 'dev'."
+    exit 1
+fi
+echo "Selected installation mode: $install_mode"
+
 # Request user information
 db_user=$(get_input "Enter your MariaDB username")
 db_pass=$(get_input "Enter your MariaDB password")
@@ -47,14 +56,33 @@ check_status "Failed to install PHP packages"
 
 # Install Composer
 echo "Installing Composer..."
-sudo apt install -y composer
-check_status "Failed to install Composer"
+if ! command -v composer &> /dev/null; then
+    curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+    check_status "Failed to install Composer"
+fi
 
-# Install Node.js and npm (required for SuiteCRM 8.x frontend)
-echo "Installing Node.js and npm..."
-curl -fsSL https://deb.nodesource.com/setup_16.x | sudo -E bash -
-sudo apt install -y nodejs
-check_status "Failed to install Node.js and npm"
+# Install Symfony CLI (required for SuiteCRM Composer scripts)
+echo "Installing Symfony CLI..."
+curl -sS https://get.symfony.com/cli/installer | bash
+sudo mv ~/.symfony*/bin/symfony /usr/local/bin/symfony
+check_status "Failed to install Symfony CLI"
+# Ensure Symfony CLI is executable
+sudo chmod +x /usr/local/bin/symfony
+
+# Install Node.js 20.x LTS and npm (only for dev mode)
+if [ "$install_mode" = "dev" ]; then
+    echo "Installing Node.js 20.x LTS and npm..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt install -y nodejs
+    check_status "Failed to install Node.js and npm"
+
+    # Enable Corepack and install Yarn 4.9.4
+    echo "Enabling Corepack and installing Yarn 4.9.4..."
+    sudo corepack enable
+    check_status "Failed to enable Corepack"
+    sudo corepack prepare yarn@4.9.4 --activate
+    check_status "Failed to install Yarn 4.9.4"
+fi
 
 # Configure Apache
 echo "Configuring Apache Server..."
@@ -84,7 +112,7 @@ sudo apt install -y mariadb-server mariadb-client
 check_status "Failed to install MariaDB"
 
 # Secure MariaDB installation (run manually as it requires interaction)
-echo "Please run 'sudo mysql_secure_installation' manually after the script finishes."
+echo "Please run 'sudo mysql_secure_installation' manually after the script finishes. If you have a MariaDB root password set, use it there."
 
 # Configure database
 echo "Configuring main database..."
@@ -121,6 +149,8 @@ echo "Installing and configuring SuiteCRM..."
 cd /var/www/html
 sudo rm -rf crm
 sudo mkdir crm
+sudo chown -R www-data:www-data crm
+sudo chmod -R 775 crm
 cd /var/www/html/crm
 sudo wget -O suitecrm-8.9.0.zip https://suitecrm.com/download/166/suite89/565428/suitecrm-8-9-0.zip
 check_status "Failed to download SuiteCRM"
@@ -135,25 +165,44 @@ sudo unzip suitecrm-8.9.0.zip
 check_status "Failed to unzip SuiteCRM"
 sudo rm suitecrm-8.9.0.zip
 
-# Install Composer dependencies
-echo "Running Composer install..."
-sudo composer install --no-interaction
-check_status "Failed to run composer install"
-
-# Install Node.js dependencies and build frontend
-echo "Running npm install and build..."
-sudo npm install
-check_status "Failed to run npm install"
-sudo npm run build
-check_status "Failed to build frontend assets"
-
-# Set permissions as per SuiteCRM 8.x requirements
+# Set permissions immediately after unzip
 echo "Setting SuiteCRM permissions..."
 sudo chown -R www-data:www-data /var/www/html/crm
-sudo chmod -R 755 /var/www/html/crm
+sudo find /var/www/html/crm -type d -not -perm 2755 -exec chmod 2755 {} \;
+sudo find /var/www/html/crm -type f -not -perm 0644 -exec chmod 0644 {} \;
 sudo chmod -R 775 /var/www/html/crm/{cache,custom,modules,public,upload}
 sudo chmod -R 775 /var/www/html/crm/config*
 sudo chmod +x /var/www/html/crm/bin/console
+
+# Fix Composer cache permissions (only for dev mode)
+if [ "$install_mode" = "dev" ]; then
+    echo "Fixing Composer cache permissions..."
+    sudo mkdir -p /var/www/.cache/composer /var/www/.composer/cache
+    sudo chown -R www-data:www-data /var/www/{.cache,.composer}
+    sudo chmod -R 775 /var/www/{.cache,.composer}
+
+    # Run Composer install (skips update to avoid lockfile issues)
+    echo "Running Composer install..."
+    sudo -u www-data composer install --no-interaction --no-plugins || {
+        echo "Warning: Composer install failed. If this is production, it may not be needed. Continuing..."
+    }
+
+    # Update abandoned package (optional; run only if composer.json allows)
+    echo "Updating abandoned package league/flysystem-azure-blob-storage..."
+    sudo -u www-data composer remove league/flysystem-azure-blob-storage --no-interaction --no-update || {
+        echo "Warning: Failed to remove abandoned package. Continuing..."
+    }
+    sudo -u www-data composer require azure-oss/storage-blob-flysystem --no-interaction --no-update || {
+        echo "Warning: Failed to install replacement package. Continuing..."
+    }
+
+    # Run Yarn install and build
+    echo "Running yarn install and build..."
+    sudo -u www-data yarn install
+    check_status "Failed to run yarn install"
+    sudo -u www-data yarn run build:common
+    check_status "Failed to build frontend assets"
+fi
 
 # Configure VirtualHost
 echo "Configuring VirtualHost..."
@@ -190,4 +239,9 @@ echo "SuiteCRM installation completed."
 echo "Please run 'sudo mysql_secure_installation' manually and follow the instructions."
 echo "Complete the installation via the web browser at: http://$server_ip"
 echo "Use the database credentials you provided (username: $db_user, database: CRM)."
+if [ "$install_mode" = "prod" ]; then
+    echo "Production mode: Composer and Yarn steps were skipped as they are not needed."
+else
+    echo "Development mode: Composer and Yarn steps were executed. If issues persist, check /var/www/html/crm/composer.json or /var/www/html/crm/package.json."
+fi
 echo "Enjoy and good luck!"
