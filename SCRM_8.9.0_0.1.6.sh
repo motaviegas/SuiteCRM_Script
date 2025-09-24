@@ -82,9 +82,9 @@ echo "Installing and configuring SuiteCRM..."
 cd /var/www/html
 sudo mkdir crm
 cd /var/www/html/crm
-sudo wget https://suitecrm.com/download/148/suite87/564667/suitecrm-8-7-1.zip
+sudo wget https://suitecrm.com/download/166/suite89/565428/suitecrm-8-9-0.zip
 #!/bin/bash 
-sudo unzip suitecrm-8-7-1.zip
+sudo unzip suitecrm-8-9-0.zip
 sudo chown -R www-data:www-data /var/www/html/crm
 sudo chmod -R 755 /var/www/html/crm
 
