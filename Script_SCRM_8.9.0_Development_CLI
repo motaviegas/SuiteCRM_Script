@@ -1,0 +1,386 @@
+#!/bin/bash
+
+# Script to install SuiteCRM 8.9.0 for development environment - Fully Automated
+
+set -e
+
+# Function to request user input
+get_input() {
+    read -p "$1: " value
+    echo "$value"
+}
+
+# Function to automatically get the internal IP
+get_internal_ip() {
+    ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127' | head -n1
+}
+
+# Function to check if a command executed successfully
+check_status() {
+    if [ $? -ne 0 ]; then
+        echo "Error: $1"
+        exit 1
+    fi
+}
+
+# Check if running as root or with sudo
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run as root or with sudo."
+    exit 1
+fi
+
+# Set installation mode to development
+install_mode="dev"
+echo "Installation mode: development"
+
+# Request user information
+db_user=$(get_input "Enter your MariaDB username")
+db_pass=$(get_input "Enter your MariaDB password")
+admin_username=$(get_input "Enter SuiteCRM admin username (e.g., admin)")
+admin_password=$(get_input "Enter SuiteCRM admin password")
+
+# Automatically get the internal IP
+server_ip=$(get_internal_ip)
+if [ -z "$server_ip" ]; then
+    echo "Error: Could not retrieve server IP."
+    exit 1
+fi
+echo "IP retrieved: $server_ip"
+
+# Update and install essential packages
+echo "Updating and installing essential packages..."
+export DEBIAN_FRONTEND=noninteractive
+apt update && apt upgrade -y
+check_status "Failed to update and upgrade packages"
+apt install -y unzip wget curl git
+check_status "Failed to install essential packages"
+
+# Install PHP 8.3 and required extensions
+echo "Installing PHP 8.3 and extensions..."
+add-apt-repository ppa:ondrej/php -y
+apt update
+apt install -y php8.3 libapache2-mod-php8.3 php8.3-cli php8.3-curl php8.3-common php8.3-intl php8.3-gd php8.3-mbstring php8.3-mysql php8.3-xml php8.3-zip php8.3-imap php8.3-ldap php8.3-soap php8.3-bcmath php8.3-opcache php8.3-apcu php8.3-xdebug
+check_status "Failed to install PHP packages"
+
+# >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+# Configure php.ini for development RIGHT AFTER PHP INSTALL
+# <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+echo "Setting php.ini for development (Apache and CLI)..."
+
+# Apache php.ini
+sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/8.3/apache2/php.ini
+sed -i 's/upload_max_filesize = .*/upload_max_filesize = 50M/' /etc/php/8.3/apache2/php.ini
+sed -i 's/post_max_size = .*/post_max_size = 50M/' /etc/php/8.3/apache2/php.ini
+sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.3/apache2/php.ini
+sed -i 's/;*date.timezone =.*/date.timezone = UTC/' /etc/php/8.3/apache2/php.ini
+sed -i 's/display_errors = .*/display_errors = On/' /etc/php/8.3/apache2/php.ini
+sed -i 's/display_startup_errors = .*/display_startup_errors = On/' /etc/php/8.3/apache2/php.ini
+sed -i 's/error_reporting = .*/error_reporting = E_ALL/' /etc/php/8.3/apache2/php.ini
+
+# CLI php.ini
+sed -i 's/memory_limit = .*/memory_limit = 512M/' /etc/php/8.3/cli/php.ini
+sed -i 's/upload_max_filesize = .*/upload_max_filesize = 50M/' /etc/php/8.3/cli/php.ini
+sed -i 's/post_max_size = .*/post_max_size = 50M/' /etc/php/8.3/cli/php.ini
+sed -i 's/max_execution_time = .*/max_execution_time = 300/' /etc/php/8.3/cli/php.ini
+sed -i 's/;*date.timezone =.*/date.timezone = UTC/' /etc/php/8.3/cli/php.ini
+sed -i 's/display_errors = .*/display_errors = On/' /etc/php/8.3/cli/php.ini
+sed -i 's/display_startup_errors = .*/display_startup_errors = On/' /etc/php/8.3/cli/php.ini
+sed -i 's/error_reporting = .*/error_reporting = E_ALL/' /etc/php/8.3/cli/php.ini
+
+# Configure OPcache and APCu for development (in Apache php.ini)
+cat << EOF >> /etc/php/8.3/apache2/php.ini
+
+[opcache]
+opcache.enable=1
+opcache.memory_consumption=128
+opcache.max_accelerated_files=10000
+opcache.validate_timestamps=1
+opcache.revalidate_freq=2
+
+[apcu]
+apcu.enable=1
+EOF
+
+# Restart Apache to apply PHP changes (optional now, but safe)
+systemctl restart apache2
+check_status "Failed to restart Apache after PHP config"
+
+# Install Composer if not present
+echo "Installing Composer..."
+if ! command -v composer &> /dev/null; then
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+    check_status "Failed to install Composer"
+fi
+
+# Set up proper directory permissions for www-data
+echo "Setting up directory permissions for www-data..."
+mkdir -p /var/www/.cache/composer
+mkdir -p /var/www/.yarn
+mkdir -p /var/www/.config
+mkdir -p /var/www/.local/share
+chown -R www-data:www-data /var/www/.cache
+chown -R www-data:www-data /var/www/.yarn
+chown -R www-data:www-data /var/www/.config
+chown -R www-data:www-data /var/www/.local
+chmod -R 775 /var/www/.cache
+chmod -R 775 /var/www/.yarn
+chmod -R 775 /var/www/.config
+chmod -R 775 /var/www/.local
+check_status "Failed to set directory permissions"
+
+# Configure Xdebug for development
+echo "Configuring Xdebug..."
+cat << EOF > /etc/php/8.3/apache2/conf.d/20-xdebug.ini
+[xdebug]
+xdebug.mode=debug
+xdebug.start_with_request=yes
+xdebug.client_host=127.0.0.1
+xdebug.client_port=9003
+xdebug.log=/tmp/xdebug.log
+EOF
+
+# Configure Apache
+echo "Configuring Apache Server..."
+a2enmod rewrite
+check_status "Failed to enable mod_rewrite"
+systemctl restart apache2
+check_status "Failed to restart Apache"
+
+# Disable default Apache site
+echo "Disabling default Apache site..."
+a2dissite 000-default.conf
+check_status "Failed to disable default site"
+
+# Disable directory listing globally
+echo "Disabling directory listing globally..."
+cat << EOF > /etc/apache2/conf-available/disable-directory-listing.conf
+<Directory /var/www/>
+    Options -Indexes
+</Directory>
+EOF
+a2enconf disable-directory-listing
+check_status "Failed to configure directory listing"
+
+# Install and configure MariaDB
+echo "Installing MariaDB..."
+debconf-set-selections <<< "mariadb-server mysql-server/root_password password "
+debconf-set-selections <<< "mariadb-server mysql-server/root_password_again password "
+apt install -y mariadb-server mariadb-client
+check_status "Failed to install MariaDB"
+
+# Configure database
+echo "Configuring main database..."
+mysql -u root -e "CREATE DATABASE IF NOT EXISTS CRM_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+check_status "Failed to create database CRM_dev"
+mysql -u root -e "CREATE USER IF NOT EXISTS '$db_user'@'localhost' IDENTIFIED BY '$db_pass';"
+check_status "Failed to create user $db_user"
+mysql -u root -e "GRANT ALL PRIVILEGES ON CRM_dev.* TO '$db_user'@'localhost'; FLUSH PRIVILEGES;"
+check_status "Failed to grant privileges"
+
+# Verify database creation
+if mysql -u root -e "USE CRM_dev"; then
+    echo "Database CRM_dev created successfully."
+else
+    echo "Failed to create database CRM_dev. Please check MySQL root permissions."
+    exit 1
+fi
+
+# Verify user creation
+if mysql -u root -e "SELECT User FROM mysql.user WHERE User='$db_user';" | grep -q "$db_user"; then
+    echo "User $db_user created successfully."
+else
+    echo "Failed to create user $db_user. Please check MySQL root permissions."
+    exit 1
+fi
+
+# Start and enable MariaDB
+systemctl start mariadb
+systemctl enable mariadb
+check_status "Failed to start/enable MariaDB"
+
+# Install SuiteCRM
+echo "Installing and configuring SuiteCRM..."
+cd /var/www/html
+rm -rf crm_dev
+mkdir crm_dev
+chown -R www-data:www-data crm_dev
+chmod -R 775 crm_dev
+cd /var/www/html/crm_dev
+wget -O suitecrm-8.9.0.zip https://suitecrm.com/download/166/suite89/565428/suitecrm-8-9-0.zip
+check_status "Failed to download SuiteCRM"
+
+# Verify downloaded file
+if [ ! -f suitecrm-8.9.0.zip ]; then
+    echo "Error: SuiteCRM zip file not found."
+    exit 1
+fi
+
+# Unzip SuiteCRM and handle subdirectory
+echo "Unzipping SuiteCRM..."
+unzip suitecrm-8.9.0.zip
+check_status "Failed to unzip SuiteCRM"
+
+# Check if SuiteCRM extracted into a subdirectory
+if [ -d "SuiteCRM-8.9.0" ]; then
+    echo "SuiteCRM extracted into subdirectory 'SuiteCRM-8.9.0'. Moving contents..."
+    mv SuiteCRM-8.9.0/* .
+    mv SuiteCRM-8.9.0/.* . 2>/dev/null || true
+    rmdir SuiteCRM-8.9.0
+    check_status "Failed to move SuiteCRM files from subdirectory"
+fi
+
+rm suitecrm-8.9.0.zip
+
+# Verify key SuiteCRM files
+echo "Verifying SuiteCRM directory structure..."
+if [ ! -d "public" ]; then
+    echo "Error: SuiteCRM directory structure is incomplete. Missing public directory."
+    exit 1
+fi
+
+# Ensure permissions before Composer commands
+echo "Ensuring permissions for Composer..."
+chown -R www-data:www-data /var/www/html/crm_dev
+chmod -R 775 /var/www/html/crm_dev
+check_status "Failed to set permissions for Composer"
+
+# Set environment variables for www-data user
+export COMPOSER_HOME=/var/www/.cache/composer
+export YARN_CACHE_FOLDER=/var/www/.yarn
+export HOME=/var/www
+
+# Install Composer dependencies for development
+echo "Installing Composer dependencies..."
+su www-data -s /bin/bash -c "COMPOSER_HOME=/var/www/.cache/composer composer update --no-interaction --prefer-dist --no-cache"
+check_status "Failed to update Composer dependencies"
+
+# Install Node.js and enable Corepack for Yarn
+echo "Installing Node.js and enabling Corepack for Yarn..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+check_status "Failed to install Node.js"
+
+# Enable Corepack and install Yarn 4.9.4
+echo "Enabling Corepack and setting Yarn version..."
+corepack enable
+check_status "Failed to enable Corepack"
+
+# Set Yarn configuration to avoid permission issues
+echo "Configuring Yarn for www-data user..."
+su www-data -s /bin/bash -c "
+export HOME=/var/www
+export YARN_CACHE_FOLDER=/var/www/.yarn
+export XDG_CACHE_HOME=/var/www/.cache
+export XDG_CONFIG_HOME=/var/www/.config
+export XDG_DATA_HOME=/var/www/.local/share
+mkdir -p /var/www/.local/share
+corepack use yarn@4.9.4
+yarn config set enableTelemetry 0
+"
+check_status "Failed to configure Yarn"
+
+# Install Node.js dependencies (frontend assets will be built by CLI installer)
+echo "Installing Node.js dependencies..."
+cd /var/www/html/crm_dev
+su www-data -s /bin/bash -c "
+export HOME=/var/www
+export YARN_CACHE_FOLDER=/var/www/.yarn
+export XDG_CACHE_HOME=/var/www/.cache
+export XDG_CONFIG_HOME=/var/www/.config
+export XDG_DATA_HOME=/var/www/.local/share
+cd /var/www/html/crm_dev
+yarn install
+"
+check_status "Failed to install Node.js dependencies"
+
+# Create missing directories if they don't exist
+echo "Creating missing directories (if any)..."
+mkdir -p /var/www/html/crm_dev/{cache,custom,modules,public,upload}
+
+# Set permissions according to SuiteCRM documentation
+echo "Setting SuiteCRM permissions..."
+chown -R www-data:www-data /var/www/html/crm_dev
+find /var/www/html/crm_dev -type d -exec chmod 755 {} \;
+find /var/www/html/crm_dev -type f -exec chmod 644 {} \;
+
+# Set specific permissions for writable directories
+for dir in cache custom modules public upload; do
+    if [ -d "/var/www/html/crm_dev/$dir" ]; then
+        chmod -R 775 "/var/www/html/crm_dev/$dir"
+        chown -R www-data:www-data "/var/www/html/crm_dev/$dir"
+    else
+        echo "Warning: Directory /var/www/html/crm_dev/$dir does not exist, creating it..."
+        mkdir -p "/var/www/html/crm_dev/$dir"
+        chmod -R 775 "/var/www/html/crm_dev/$dir"
+        chown -R www-data:www-data "/var/www/html/crm_dev/$dir"
+    fi
+done
+
+# Handle config directories
+if [ -d "/var/www/html/crm_dev/config" ] || [ -d "/var/www/html/crm_dev/config_override" ]; then
+    chmod -R 775 /var/www/html/crm_dev/config*
+    chown -R www-data:www-data /var/www/html/crm_dev/config*
+else
+    echo "Warning: Config directory not found, creating it..."
+    mkdir -p /var/www/html/crm_dev/config
+    chmod -R 775 /var/www/html/crm_dev/config
+    chown -R www-data:www-data /var/www/html/crm_dev/config
+fi
+
+# Make console executable
+if [ -f "/var/www/html/crm_dev/bin/console" ]; then
+    chmod +x /var/www/html/crm_dev/bin/console
+else
+    echo "Warning: bin/console not found, skipping chmod."
+fi
+
+# Run CLI installer for development
+echo "Running CLI installer..."
+cd /var/www/html/crm_dev
+su www-data -s /bin/bash -c "cd /var/www/html/crm_dev && ./bin/console suitecrm:app:install -u \"$admin_username\" -p \"$admin_password\" -U \"$db_user\" -P \"$db_pass\" -H \"127.0.0.1\" -N \"CRM_dev\" -S \"http://$server_ip\" -d \"yes\""
+check_status "Failed to run CLI installer"
+
+# Re-set permissions after installation
+echo "Re-setting permissions after installation..."
+chown -R www-data:www-data /var/www/html/crm_dev
+find /var/www/html/crm_dev -type d -exec chmod 755 {} \;
+find /var/www/html/crm_dev -type f -exec chmod 644 {} \;
+for dir in cache custom modules public upload; do
+    chmod -R 775 "/var/www/html/crm_dev/$dir"
+    chown -R www-data:www-data "/var/www/html/crm_dev/$dir"
+done
+chmod -R 775 /var/www/html/crm_dev/config*
+chown -R www-data:www-data /var/www/html/crm_dev/config*
+if [ -f "/var/www/html/crm_dev/bin/console" ]; then
+    chmod +x /var/www/html/crm_dev/bin/console
+fi
+
+# Configure VirtualHost
+echo "Configuring VirtualHost..."
+cat << EOF > /etc/apache2/sites-available/crm_dev.conf
+<VirtualHost *:80>
+    ServerAdmin admin@example.com
+    DocumentRoot /var/www/html/crm_dev/public
+    ServerName $server_ip
+    <Directory /var/www/html/crm_dev/public>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    ErrorLog \${APACHE_LOG_DIR}/crm_dev_error.log
+    CustomLog \${APACHE_LOG_DIR}/crm_dev_access.log combined
+</VirtualHost>
+EOF
+a2ensite crm_dev.conf
+check_status "Failed to enable crm_dev.conf"
+systemctl reload apache2
+check_status "Failed to reload Apache"
+
+# Final Apache restart (optional but safe)
+systemctl restart apache2
+check_status "Failed to restart Apache after VirtualHost setup"
+
+echo "SuiteCRM 8.9.0 development installation completed successfully."
+echo "Access your SuiteCRM instance at: http://$server_ip"
+echo "Login with admin username: $admin_username"
+echo "Enjoy and good luck!"
