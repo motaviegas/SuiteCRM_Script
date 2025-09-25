@@ -54,7 +54,7 @@ sudo apt update
 sudo apt install -y php8.2 libapache2-mod-php8.2 php8.2-cli php8.2-curl php8.2-common php8.2-intl php8.2-gd php8.2-mbstring php8.2-mysql php8.2-xml php8.2-zip php8.2-imap php8.2-ldap php8.2-soap php8.2-bcmath php8.2-opcache
 check_status "Failed to install PHP packages"
 
-# Install Composer
+# Install Composer if not present
 echo "Installing Composer..."
 if ! command -v composer &> /dev/null; then
     curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
@@ -63,25 +63,32 @@ fi
 
 # Install Symfony CLI (required for SuiteCRM Composer scripts)
 echo "Installing Symfony CLI..."
-curl -sS https://get.symfony.com/cli/installer | bash
-sudo mv ~/.symfony*/bin/symfony /usr/local/bin/symfony
-check_status "Failed to install Symfony CLI"
-# Ensure Symfony CLI is executable
+if ! command -v symfony &> /dev/null; then
+    curl -sS https://get.symfony.com/cli/installer | bash
+    sudo mv ~/.symfony*/bin/symfony /usr/local/bin/symfony
+    check_status "Failed to install Symfony CLI"
+fi
 sudo chmod +x /usr/local/bin/symfony
 
 # Install Node.js 20.x LTS and npm (only for dev mode)
 if [ "$install_mode" = "dev" ]; then
     echo "Installing Node.js 20.x LTS and npm..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt install -y nodejs
-    check_status "Failed to install Node.js and npm"
+    if ! command -v node &> /dev/null; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+        sudo apt install -y nodejs
+        check_status "Failed to install Node.js and npm"
+    fi
 
-    # Enable Corepack and install Yarn 4.9.4
+    # Enable Corepack and prepare Yarn 4.9.4
     echo "Enabling Corepack and installing Yarn 4.9.4..."
+    if ! command -v corepack &> /dev/null; then
+        sudo npm install -g corepack
+        check_status "Failed to install Corepack"
+    fi
     sudo corepack enable
     check_status "Failed to enable Corepack"
     sudo corepack prepare yarn@4.9.4 --activate
-    check_status "Failed to install Yarn 4.9.4"
+    check_status "Failed to prepare Yarn 4.9.4"
 fi
 
 # Configure Apache
@@ -174,31 +181,35 @@ sudo chmod -R 775 /var/www/html/crm/{cache,custom,modules,public,upload}
 sudo chmod -R 775 /var/www/html/crm/config*
 sudo chmod +x /var/www/html/crm/bin/console
 
-# Fix Composer cache permissions (only for dev mode)
+# For dev mode: Prepare cache directories with checks
 if [ "$install_mode" = "dev" ]; then
-    echo "Fixing Composer cache permissions..."
-    sudo mkdir -p /var/www/.cache/composer /var/www/.composer/cache
-    sudo chown -R www-data:www-data /var/www/{.cache,.composer}
-    sudo chmod -R 775 /var/www/{.cache,.composer}
+    echo "Preparing cache directories for Composer and Yarn..."
+    for dir in /var/www/.cache/composer /var/www/.composer/cache /var/www/.yarn; do
+        if [ ! -d "$dir" ]; then
+            sudo mkdir -p "$dir"
+        fi
+        sudo chown -R www-data:www-data "$dir"
+        sudo chmod -R 775 "$dir"
+    done
 
-    # Run Composer install (skips update to avoid lockfile issues)
+    # Run Composer install with extended PATH
     echo "Running Composer install..."
-    sudo -u www-data composer install --no-interaction --no-plugins || {
-        echo "Warning: Composer install failed. If this is production, it may not be needed. Continuing..."
+    sudo -u www-data PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin composer install --no-interaction --no-plugins || {
+        echo "Warning: Composer install failed. Continuing..."
     }
 
-    # Update abandoned package (optional; run only if composer.json allows)
+    # Update abandoned package
     echo "Updating abandoned package league/flysystem-azure-blob-storage..."
-    sudo -u www-data composer remove league/flysystem-azure-blob-storage --no-interaction --no-update || {
+    sudo -u www-data PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin composer remove league/flysystem-azure-blob-storage --no-interaction --no-update || {
         echo "Warning: Failed to remove abandoned package. Continuing..."
     }
-    sudo -u www-data composer require azure-oss/storage-blob-flysystem --no-interaction --no-update || {
+    sudo -u www-data PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin composer require azure-oss/storage-blob-flysystem --no-interaction --no-update || {
         echo "Warning: Failed to install replacement package. Continuing..."
     }
 
     # Run Yarn install and build
     echo "Running yarn install and build..."
-    sudo -u www-data yarn install
+    sudo -u www-data yarn install --check-files
     check_status "Failed to run yarn install"
     sudo -u www-data yarn run build:common
     check_status "Failed to build frontend assets"
