@@ -1,55 +1,39 @@
-Steps to follow:
+Instructions for running the script
 
-    Install a lunix server / or use an existing one. This scrit was tested in a Ubuntu server 24.04
+This works on a clean Ubuntu 24.04 server, 
+Open the terminal, best using SSH.
 
-    Open the terminal and create a sh file, you can give whatever name you want just be sure to have the extension “yourfilename”.sh. I use nano
+Create a new script file (you can choose any name, example: install-crm.sh):
 
-  sudo nano "yourfilename".sh
+sudo nano install-crm.sh
 
-Copy the entire lines inside the sh s_crm_0.1.sh file
+Copy the entire script code (the full block I gave you) and paste it inside the editor.
+Save and exit nano:
+Press Ctrl + O → Enter → Ctrl + X
+Make the file executable:
 
-Change the permissions of the new sh file useing this command
+sudo chmod +x install-crm.sh
 
-    sudo chmod +x "yourfilename".sh
+Run the script:
 
-To run the new script use the following command
+sudo ./install-crm.sh
 
-    sudo ./"yourfilename".sh
+What happens next:
+The script asks a few questions.
+Most of the time you can just press Enter to accept the default values.
+It will ask for:
+Install path → press Enter (uses /var/www/html/crm)
+Server IP/domain → press Enter (uses your server's IP)
+Admin username → press Enter (uses "admin") or type your preferred name
+Admin password → press Enter (auto-generates a strong one)
+MariaDB/MySQL root password → press Enter (auto-generates)
+Database user → press Enter (uses "suitecrm") or type your own
+Database user password → press Enter (auto-generates)
 
-Follow the script requests and take note of the user & password of the databse that will be requested
+At the end it asks: Proceed? [Y/n] → press Enter (or Y)
 
-When the script finishes run the command
-
-    sudo mysql_secure_installation
-
-just press enter (there is no root password
-
-Switch to unix_socket authentication [Y/n] Y
-
-Change the root password? [Y/n] y
-
-put your DB root password and take note of it!!!
-
-Remove anonymous users? [Y/n] Y
-
-Disallow root login remotely? [Y/n] Y
-
-Remove test database and access to it? [Y/n] Y
-
-    Reload privilege tables now? [Y/n]
-
-    Now you can use the IP address and conclude the instalation of the CSuite CRM using the DB user and passwords you choose at the begining.
-
-    On the webpag config on these fields you place
-    DATABASE CONFIGURATION:
-    SuiteCRM Database User
-    USER THAT YOU CHOOSE ON THE SCRIPT
-    SuiteCRM Database User Password
-    PASSWORD THAT YOU CHOOSE ON THE SCRIPT
-    Host Name
-    localhost
-    Database Name
-    CRM
-
-Then the rest you decide which admin user and admin password
-GOOD LUCK!
+After the script finishes:
+Open your browser and go to:
+http://your-server-ip (the IP shown earlier)
+Log in with the admin username and admin password shown at the end of the script output.
+Important: Write down or copy the passwords shown in the final summary (admin + database + root).
