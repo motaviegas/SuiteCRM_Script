@@ -4,7 +4,7 @@
 
 Installation of SuiteCRM on a Ubuntu server 24.04 of the following versions:
 
-- 7.14
+- 7.14.9
 - 8.7.1 
 - 8.9
 
