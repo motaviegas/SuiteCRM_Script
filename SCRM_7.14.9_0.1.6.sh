@@ -1,5 +1,5 @@
 #!/bin/bash
-#Installing SuiteCRM 7.14.6
+#Installing SuiteCRM 7.14.9
 #1. Function definitions
 get_input() {
     read -p "$1: " value
@@ -53,10 +53,10 @@ cd /var/www
 sudo rm -rf html
 sudo mkdir html
 cd html
-sudo wget https://suitecrm.com/download/141/suite714/564663/suitecrm-7-14-6.zip
-sudo unzip suitecrm-7-14-6.zip -d temp
-sudo mv temp/SuiteCRM-7.14.6/* .
-sudo rm -rf temp suitecrm-7-14-6.zip
+sudo wget https://suitecrm.com/download/141/suite714/567681/suitecrm-7-14-9.zip
+sudo unzip suitecrm-7-14-9.zip -d temp
+sudo mv temp/SuiteCRM-7.14.9/* .
+sudo rm -rf temp suitecrm-7-14-9.zip
 
 #9. Apache VirtualHost configuration
 cat << EOF | sudo tee /etc/apache2/sites-available/000-default.conf
